@@ -1,0 +1,103 @@
+//@version=2
+strategy("ACD Quarterly Strategy with MAs and Smart Filters", overlay=true)
+
+// Profit Targets
+pt1 = input(0.1618, minval=0, maxval=15, title="Profit Target 1")
+pt2 = input(0.3236, minval=0, maxval=15, title="Profit Target 2")
+pt3 = input(0.4854, minval=0, maxval=15, title="Profit Target 3")
+pt4 = input(0.6472, minval=0, maxval=15, title="Profit Target 4")
+pt5 = input(0.8090, minval=0, maxval=15, title="Profit Target 5")
+
+// ATR Period
+atrPeriod = input(14, minval=1, title="ATR Period")
+
+// Weekly High and Low
+weekly_low = security(tickerid, "W", low)
+weekly_high = security(tickerid, "W", high)
+atr1 = security(tickerid, "3M", atr(atrPeriod))
+
+// Quarterly High and Low
+h1 = if (weekofyear == 1 or weekofyear == 14 or weekofyear == 27 or weekofyear == 40)
+    weekly_high
+else
+    h1[1]
+
+l1 = if (weekofyear == 1 or weekofyear == 14 or weekofyear == 27 or weekofyear == 40)
+    weekly_low
+else
+    l1[1]
+
+// Profit Targets Calculations
+AUp1 = h1 + atr1 * pt1
+ADown1 = l1 - atr1 * pt1
+AUp2 = h1 + atr1 * pt2
+ADown2 = l1 - atr1 * pt2
+AUp3 = h1 + atr1 * pt3
+ADown3 = l1 - atr1 * pt3
+AUp4 = h1 + atr1 * pt4
+ADown4 = l1 - atr1 * pt4
+AUp5 = h1 + atr1 * pt5
+ADown5 = l1 - atr1 * pt5
+
+// Plotting ACD Levels
+plot(h1, color=blue, linewidth=2, title="Quarterly High")
+plot(l1, color=red, linewidth=2, title="Quarterly Low")
+plot(AUp1, color=green, linewidth=1, title="AUp1")
+plot(ADown1, color=green, linewidth=1, title="ADown1")
+plot(AUp2, color=green, linewidth=1, title="AUp2")
+plot(ADown2, color=green, linewidth=1, title="ADown2")
+plot(AUp3, color=green, linewidth=1, title="AUp3")
+plot(ADown3, color=green, linewidth=1, title="ADown3")
+plot(AUp4, color=green, linewidth=1, title="AUp4")
+plot(ADown4, color=green, linewidth=1, title="ADown4")
+plot(AUp5, color=green, linewidth=1, title="AUp5")
+plot(ADown5, color=green, linewidth=1, title="ADown5")
+
+// Moving Averages
+ma50 = sma(close, 50)
+ma200 = sma(close, 200)
+
+plot(ma50, color=blue, linewidth=2, title="50-period MA")
+plot(ma200, color=orange, linewidth=2, title="200-period MA")
+
+// Volume Filter
+vol = volume
+vol_avg = sma(vol, 20)
+vol_filter = vol > vol_avg
+
+// Additional Indicator: RSI
+rsi = rsi(close, 14)
+rsi_filter = rsi > 50
+
+// Additional Indicator: MACD
+[macdLine, signalLine, _] = macd(close, 12, 26, 9)
+macd_filter = macdLine > signalLine
+
+// Entry Conditions
+longCondition = crossover(close, AUp1) and close > ma50 and ma50 > ma200 and vol_filter and rsi_filter and macd_filter
+shortCondition = crossunder(close, ADown1) and close < ma50 and ma50 < ma200 and vol_filter and not rsi_filter and not macd_filter
+
+// Stop Loss and Take Profit
+stopLoss = input(1, title="Stop Loss (%)") / 100
+takeProfit = input(2, title="Take Profit (%)") / 100
+
+if (longCondition)
+    strategy.entry("Long", strategy.long, stop=close * (1 - stopLoss), limit=close * (1 + takeProfit))
+
+if (shortCondition)
+    strategy.entry("Short", strategy.short, stop=close * (1 + stopLoss), limit=close * (1 - takeProfit))
+
+// Close conditions
+if (crossover(close, AUp2))
+    strategy.close("Long")
+
+if (crossunder(close, ADown2))
+    strategy.close("Short")
+
+// Trailing Stop
+trailOffset = input(1, title="Trailing Stop Offset (%)") / 100
+if (strategy.position_size > 0)
+    strategy.exit("Trail Long", "Long", trail_offset=trailOffset * close)
+
+if (strategy.position_size < 0)
+    strategy.exit("Trail Short", "Short", trail_offset=trailOffset * close)
